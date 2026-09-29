@@ -55,7 +55,8 @@ c4.metric("Average power", f"{data['power_kw'].mean():.2f} kW")
 
 # Charts
 by_hour = data.groupby("hour")["power_kw"].mean().reset_index()
-fig1 = px.bar(by_hour, x="hour", y="power_kw", title="Average power by hour of day (kW)")
+fig1 = px.bar(by_hour, x="hour", y="power_kw", title="Average power by hour of day (kW)",
+              labels={"hour": "Hour of day", "power_kw": "Average power (kW)"})
 
 daily = (
     data.groupby(["household_id", "date"])
@@ -66,8 +67,11 @@ daily = daily[daily["readings"] == 48]
 daily = daily.groupby("date")["energy_kwh"].mean().reset_index()
 daily["date"] = pd.to_datetime(daily["date"])
 daily["cost"] = daily["energy_kwh"] * price
-fig2 = px.line(daily, x="date", y="energy_kwh", title="Daily energy per household (kWh)")
-fig3 = px.line(daily, x="date", y="cost", title="Daily cost per household (£)")
+fig2 = px.line(daily, x="date", y="energy_kwh", title="Daily energy per household (kWh)",
+               labels={"date": "Date", "energy_kwh": "Energy (kWh)"})
+fig3 = px.line(daily, x="date", y="cost", title="Daily cost per household (£)",
+               labels={"date": "Date", "cost": "Cost (£)"})
+
 
 left, right = st.columns(2)
 left.plotly_chart(fig1, use_container_width=True)

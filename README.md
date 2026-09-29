@@ -4,7 +4,8 @@ An end-to-end data project that cleans household electricity data, stores it in 
 
 Built with Python, Pandas, SQLite, scikit-learn, Plotly and Streamlit.
 
-<!-- Add a dashboard screenshot here once saved, e.g. ![Dashboard](outputs/dashboard.png) -->
+![Dashboard](outputs/dashboard.png)
+![Forecast](outputs/dashboard_forecast.png)
 
 ## What it does
 
