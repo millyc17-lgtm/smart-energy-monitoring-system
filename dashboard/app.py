@@ -94,3 +94,29 @@ top = anoms.nlargest(10, "energy_kwh")[
     ["household_id", "timestamp", "energy_kwh", "normal_mean", "upper_limit"]
 ].round({"energy_kwh": 2, "normal_mean": 2, "upper_limit": 2})
 st.dataframe(top, width="stretch")
+
+st.subheader("Machine-learning anomalies (Isolation Forest)")
+
+
+@st.cache_data
+def load_ml_anomalies():
+    return pd.read_csv("data/processed/ml_anomalies_only.csv", parse_dates=["timestamp"])
+
+
+ml = load_ml_anomalies()
+ml = ml[
+    (ml["timestamp"] >= pd.Timestamp(start))
+    & (ml["timestamp"] < pd.Timestamp(end) + pd.Timedelta(days=1))
+]
+if household != "All households":
+    ml = ml[ml["household_id"] == household]
+
+st.write(
+    f"{len(ml):,} readings flagged by the ML model, "
+    f"{int(ml['is_anomaly'].sum()):,} of them also flagged by the rule-based detector (higher confidence)"
+)
+top_ml = ml.nsmallest(10, "ml_score")[
+    ["household_id", "timestamp", "energy_kwh", "normal_mean", "ml_score", "is_anomaly"]
+].rename(columns={"is_anomaly": "also_flagged_by_rule"})
+top_ml = top_ml.round({"energy_kwh": 2, "normal_mean": 2, "ml_score": 3})
+st.dataframe(top_ml, width="stretch")
