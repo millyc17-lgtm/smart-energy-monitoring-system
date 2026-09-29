@@ -72,3 +72,25 @@ left, right = st.columns(2)
 left.plotly_chart(fig1, use_container_width=True)
 right.plotly_chart(fig2, use_container_width=True)
 st.plotly_chart(fig3, use_container_width=True)
+
+st.subheader("Unusual usage detected")
+
+
+@st.cache_data
+def load_anomalies():
+    return pd.read_csv("data/processed/anomalies_only.csv", parse_dates=["timestamp"])
+
+
+anoms = load_anomalies()
+anoms = anoms[
+    (anoms["timestamp"] >= pd.Timestamp(start))
+    & (anoms["timestamp"] < pd.Timestamp(end) + pd.Timedelta(days=1))
+]
+if household != "All households":
+    anoms = anoms[anoms["household_id"] == household]
+
+st.write(f"{len(anoms):,} unusual readings in this selection")
+top = anoms.nlargest(10, "energy_kwh")[
+    ["household_id", "timestamp", "energy_kwh", "normal_mean", "upper_limit"]
+].round({"energy_kwh": 2, "normal_mean": 2, "upper_limit": 2})
+st.dataframe(top, width="stretch")
