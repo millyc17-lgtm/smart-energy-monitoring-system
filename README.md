@@ -1,20 +1,21 @@
 # Smart Energy Monitoring System
 
-An end-to-end data project that cleans household electricity data, stores it in SQLite, detects unusual consumption, forecasts daily usage, and presents everything in an interactive Streamlit dashboard.
+An end-to-end data project that cleans household electricity data, stores it in SQLite, detects unusual consumption, forecasts daily usage, and presents everything in an interactive Streamlit dashboard that queries the database with SQL.
 
 Built with Python, Pandas, SQLite, scikit-learn, Plotly and Streamlit.
 
 ![Dashboard](outputs/dashboard.png)
-![Forecast](outputs/dashboard_forecast.png)
 
 ## What it does
 
 - **Cleans and prepares** half-hourly smart meter readings (types, duplicates, missing values, time features)
 - **Analyses** consumption by hour, weekday, weekend and month
-- **Stores** the data in a SQLite database
+- **Stores** the data in a SQLite database with indexes on household, time and date
 - **Detects anomalies** with two methods and compares them: a rolling statistical rule and an Isolation Forest model
 - **Forecasts** daily energy use per household and compares three models against simple baselines
-- **Shows it all** in a dashboard with household, date-range and electricity-price controls
+- **Shows it all** in a dashboard with household, date-range and electricity-price controls. The summary cards and charts are SQL aggregations run against the database, with filters passed as query parameters
+
+![Forecast](outputs/dashboard_forecast.png)
 
 ## Data
 
@@ -22,9 +23,9 @@ Low Carbon London smart meter data (Kaggle, "Smart meters in London"), using `bl
 
 - Readings run from **December 2011 to February 2014**. This is historical data, not live usage.
 - 1,222,670 raw readings; 50 missing values were dropped, leaving 1,222,620. No duplicates or negative values were found.
-- Only one household reported before March 2012, and the panel only stabilised (43 to 50 households) from **October 2012**. Trend analysis and forecasting therefore use October 2012 onwards.
+- Only one household reported before March 2012, and the panel only stabilised (43 to 50 households) from **October 2012**. Trend analysis and forecasting therefore use October 2012 onwards, and the dashboard defaults to that start date.
 - Power (kW) is derived from the half-hourly energy: `kW = kWh x 2`.
-- Raw data is never modified. Cleaned data is written to `data/processed/`.
+- Raw data is never modified. Cleaned data is written to `data/processed/` and loaded into `data/energy.db`.
 
 ## Key findings
 
@@ -54,6 +55,7 @@ The methods overlap on about a quarter of flagged readings. Readings flagged by 
 Notes:
 - One unusual event shows up as several flagged readings in a row, so counts are of *readings*, not incidents.
 - No labelled anomalies exist, so neither method's accuracy can be measured. Flags mean "unusually high for this household at this time", not "fault" or "appliance left on".
+- The counts above cover the whole dataset. The dashboard shows lower counts by default because it starts from October 2012.
 
 ## Forecasting
 
@@ -82,9 +84,9 @@ data/
   raw/            original download (not tracked)
   processed/      cleaned data and model outputs (not tracked)
   energy.db       SQLite database (not tracked)
-dashboard/app.py  Streamlit app
+dashboard/app.py  Streamlit app (queries energy.db with SQL)
 models/           trained forecast model and results table
-outputs/          charts
+outputs/          charts and screenshots
 clean.py  features.py  build_db.py  analysis.py
 anomaly.py  anomaly_ml.py  forecast.py
 ```
@@ -112,10 +114,12 @@ anomaly.py  anomaly_ml.py  forecast.py
 - **Tariff is an assumption.** The default price of 0.25 GBP per kWh is adjustable in the dashboard and is not a real tariff.
 - **Anomalies are unvalidated.** There is no ground truth, the two detectors disagree on most flags, and a flag does not explain the cause.
 - **Forecast scope.** The test window covers winter only, the model uses no weather or holiday data, and it underestimates sudden spikes because it relies on recent usage.
+- **Precomputed model outputs.** Anomaly flags and the forecast model are produced by the scripts and read by the dashboard. The dashboard does not retrain or score new data.
 - **Sampling interval.** Half-hourly data cannot show short bursts of power; the reported peak power is a half-hour average.
 
 ## Planned work
 
-- Load dashboard data with SQL queries instead of reading the whole table
-- Monthly report, carbon-emissions estimate (configurable factor with a cited source), multi-page layout
+- Monthly report and a carbon-emissions estimate (configurable factor with a cited source)
+- Multi-page dashboard layout
+- Optional hosted version of the dashboard
 - Optional live-data prototype using an ESP32 with a safe, enclosed energy-monitoring module
