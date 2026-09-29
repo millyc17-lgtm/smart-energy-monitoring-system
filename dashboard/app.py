@@ -2,6 +2,7 @@ import sqlite3
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import joblib
 
 st.set_page_config(page_title="Smart Energy Monitor", layout="wide")
 
@@ -120,3 +121,53 @@ top_ml = ml.nsmallest(10, "ml_score")[
 ].rename(columns={"is_anomaly": "also_flagged_by_rule"})
 top_ml = top_ml.round({"energy_kwh": 2, "normal_mean": 2, "ml_score": 3})
 st.dataframe(top_ml, width="stretch")
+
+st.subheader("Energy forecast")
+
+
+@st.cache_resource
+def load_model():
+    return joblib.load("models/best_forecast_model.joblib")
+
+
+@st.cache_data
+def load_daily():
+    d = (
+        df.groupby(["household_id", "date"])
+        .agg(energy_kwh=("energy_kwh", "sum"), readings=("energy_kwh", "count"))
+        .reset_index()
+    )
+    d = d[d["readings"] == 48].drop(columns="readings")
+    d["date"] = pd.to_datetime(d["date"])
+    return d
+
+
+all_daily = load_daily()
+last_day = all_daily["date"].max()
+target = last_day + pd.Timedelta(days=1)
+
+yesterday = all_daily[all_daily["date"] == last_day][["household_id", "energy_kwh"]].rename(columns={"energy_kwh": "lag_1"})
+last_week = all_daily[all_daily["date"] == target - pd.Timedelta(days=7)][["household_id", "energy_kwh"]].rename(columns={"energy_kwh": "lag_7"})
+X = yesterday.merge(last_week, on="household_id")
+if household != "All households":
+    X = X[X["household_id"] == household]
+
+if X.empty:
+    st.info("Not enough recent data to forecast for this household.")
+else:
+    X["day_of_week"] = target.dayofweek
+    X["is_weekend"] = int(target.dayofweek >= 5)
+    X["month"] = target.month
+    predicted = load_model().predict(X[["lag_1", "lag_7", "day_of_week", "is_weekend", "month"]])
+    forecast_kwh = predicted.mean()
+
+    f1, f2 = st.columns(2)
+    f1.metric(f"Forecast for {target.date()} (per household)", f"{forecast_kwh:.1f} kWh")
+    f2.metric("Estimated cost", f"£{forecast_kwh * price:.2f}")
+    st.caption(
+        "The forecast is for the day after the last full day in the historical data. "
+        "It ignores the date filter, and the model does not use weather or holidays."
+    )
+
+st.image("outputs/actual_vs_predicted.png", caption="Actual vs predicted daily energy (test period, averaged across households)")
+st.dataframe(pd.read_csv("models/forecast_results.csv"), width="stretch")
