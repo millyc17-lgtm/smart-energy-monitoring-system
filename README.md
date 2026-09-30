@@ -14,6 +14,7 @@ Built with Python, Pandas, SQLite, scikit-learn, Plotly and Streamlit.
 - **Detects anomalies** with two methods and compares them: a rolling statistical rule and an Isolation Forest model
 - **Forecasts** daily energy use per household and compares three models against simple baselines
 - **Shows it all** in a dashboard with household, date-range and electricity-price controls. The summary cards and charts are SQL aggregations run against the database, with filters passed as query parameters
+- **Estimates carbon emissions** using a configurable factor (default 0.13096 kg CO2e per kWh, see below) and produces a **monthly report** with month-on-month comparison and CSV download
 
 ![Forecast](outputs/dashboard_forecast.png)
 
@@ -77,6 +78,18 @@ Linear Regression had the lowest MAE, about 19% of the mean daily use and roughl
 
 ![Actual vs predicted](outputs/actual_vs_predicted.png)
 
+## Carbon emissions
+
+Estimated emissions = energy (kWh) x an emissions factor. The factor is an input in the dashboard sidebar.
+
+- **Default factor:** 0.13096 kg CO2e per kWh, UK grid electricity (electricity generated, location-based), from the UK Government GHG Conversion Factors for Company Reporting 2026 (DESNZ/DEFRA), methodology paper Table 9.
+- **These are estimates, not measurements.** Transmission and distribution losses are not included, and supplier-specific (market-based) factors are not used.
+- **Year mismatch:** the readings are from 2011 to 2014, when the UK grid was considerably more carbon-intensive than the 2026 factor implies, so emissions for that period are likely understated.
+
+## Monthly report
+
+The dashboard includes a monthly report (energy, estimated cost, estimated emissions, average per household per day, peak power) for any month from October 2012, for all households or a single one, with a CSV download. It uses full days only (48 readings) and compares months using per-household daily averages, because the number of reporting households varies.
+
 ## Project structure
 
 ```
@@ -112,6 +125,7 @@ anomaly.py  anomaly_ml.py  forecast.py
 - **Small, unrepresentative sample.** 50 households from one file. The average of about 21 kWh per household per day is well above typical UK household use, so results should not be read as UK averages.
 - **Changing panel.** The number of reporting households changed over time, so early-period trends are unreliable and excluded.
 - **Tariff is an assumption.** The default price of 0.25 GBP per kWh is adjustable in the dashboard and is not a real tariff.
+- **Emissions are estimates.** A 2026 grid factor is applied to 2011-2014 data (see Carbon emissions above), and the factor should be checked against the official publication before reuse.
 - **Anomalies are unvalidated.** There is no ground truth, the two detectors disagree on most flags, and a flag does not explain the cause.
 - **Forecast scope.** The test window covers winter only, the model uses no weather or holiday data, and it underestimates sudden spikes because it relies on recent usage.
 - **Precomputed model outputs.** Anomaly flags and the forecast model are produced by the scripts and read by the dashboard. The dashboard does not retrain or score new data.
@@ -119,7 +133,6 @@ anomaly.py  anomaly_ml.py  forecast.py
 
 ## Planned work
 
-- Monthly report and a carbon-emissions estimate (configurable factor with a cited source)
 - Multi-page dashboard layout
 - Optional hosted version of the dashboard
 - Optional live-data prototype using an ESP32 with a safe, enclosed energy-monitoring module

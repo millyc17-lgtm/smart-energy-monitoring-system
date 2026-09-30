@@ -39,6 +39,12 @@ if len(dates) != 2:
     st.stop()
 start, end = dates
 price = st.sidebar.number_input("Electricity price (£ per kWh)", min_value=0.0, value=0.25, step=0.01)
+factor = st.sidebar.number_input(
+    "Emissions factor (kg CO₂e per kWh)",
+    min_value=0.0, value=0.13096, step=0.001, format="%.5f",
+    help="UK grid electricity, DESNZ/DEFRA 2026 conversion factors. Change it to test other assumptions.",
+)
+
 
 # Filters are passed to SQL as ? placeholders, never pasted into the query text
 where = "date >= ? AND date <= ?"
@@ -62,11 +68,16 @@ if kpi["n"][0] == 0:
 st.title("Smart Energy Monitoring System")
 st.caption("Historical London smart meter data (2011-2014). The price is an adjustable assumption, not a real tariff.")
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Total energy", f"{kpi['total_kwh'][0]:,.0f} kWh")
 c2.metric("Estimated cost", f"£{kpi['total_kwh'][0] * price:,.0f}")
-c3.metric("Peak power", f"{kpi['peak_kw'][0]:.2f} kW")
-c4.metric("Average power", f"{kpi['avg_kw'][0]:.2f} kW")
+c3.metric("Estimated emissions", f"{kpi['total_kwh'][0] * factor:,.0f} kg CO₂e")
+c4.metric("Peak power", f"{kpi['peak_kw'][0]:.2f} kW")
+c5.metric("Average power", f"{kpi['avg_kw'][0]:.2f} kW")
+st.caption(
+    "Emissions are an estimate (energy x the factor in the sidebar), not a measurement. "
+    "The data is from 2011-2014, when the grid was more carbon-intensive than the 2026 factor suggests."
+)
 
 # ---------- Charts ----------
 by_hour = run_query(
@@ -192,3 +203,79 @@ else:
 
 st.image("outputs/actual_vs_predicted.png", caption="Actual vs predicted daily energy (test period, averaged across households)")
 st.dataframe(pd.read_csv("models/forecast_results.csv"), width="stretch", hide_index=True)
+
+
+# ---------- Monthly report ----------
+st.subheader("Monthly report")
+
+months = run_query(
+    "SELECT DISTINCT substr(date, 1, 7) AS month FROM energy_readings WHERE date >= '2012-10-01' ORDER BY month"
+)["month"].tolist()
+month = st.selectbox("Month", months, index=max(len(months) - 2, 0))
+
+
+def month_stats(m):
+    sql = """
+        SELECT COUNT(*) AS household_days, SUM(day_kwh) AS total_kwh,
+               AVG(day_kwh) AS avg_day_kwh, MAX(peak_kw) AS peak_kw
+        FROM (
+            SELECT household_id, date, SUM(energy_kwh) AS day_kwh, MAX(power_kw) AS peak_kw
+            FROM energy_readings
+            WHERE substr(date, 1, 7) = ?"""
+    p = [m]
+    if household != "All households":
+        sql += " AND household_id = ?"
+        p.append(household)
+    sql += """
+            GROUP BY household_id, date
+            HAVING COUNT(*) = 48
+        )"""
+    return run_query(sql, tuple(p)).iloc[0]
+
+
+cur = month_stats(month)
+prev_month = (pd.Period(month) - 1).strftime("%Y-%m")
+prev = month_stats(prev_month) if prev_month in months else None
+
+if cur["household_days"] == 0:
+    st.info("No full days of data for this month and household.")
+else:
+    total_kwh = cur["total_kwh"]
+    change = None
+    if prev is not None and prev["household_days"] > 0:
+        change = (cur["avg_day_kwh"] / prev["avg_day_kwh"] - 1) * 100
+
+    r1, r2, r3, r4 = st.columns(4)
+    r1.metric("Total energy", f"{total_kwh:,.0f} kWh")
+    r2.metric("Estimated cost", f"£{total_kwh * price:,.0f}")
+    r3.metric("Estimated emissions", f"{total_kwh * factor:,.0f} kg CO₂e")
+    r4.metric(
+        "Average per household per day",
+        f"{cur['avg_day_kwh']:.1f} kWh",
+        delta=None if change is None else f"{change:+.1f}% vs previous month",
+        delta_color="inverse",
+    )
+
+    report = pd.DataFrame({
+        "Metric": [
+            "Month", "Household", "Total energy (kWh)", "Estimated cost (GBP)",
+            "Estimated emissions (kg CO2e)", "Average per household per day (kWh)",
+            "Peak power (kW)", "Change vs previous month (%)",
+        ],
+        "Value": [
+            month, household, f"{total_kwh:.1f}", f"{total_kwh * price:.2f}",
+            f"{total_kwh * factor:.1f}", f"{cur['avg_day_kwh']:.2f}", f"{cur['peak_kw']:.2f}",
+            "n/a" if change is None else f"{change:.1f}",
+        ],
+    })
+    st.dataframe(report, width="stretch", hide_index=True)
+    st.download_button(
+        "Download report (CSV)",
+        report.to_csv(index=False),
+        file_name=f"energy_report_{month}.csv",
+        mime="text/csv",
+    )
+    st.caption(
+        "Full days only (48 readings). Uses the price and emissions factor from the sidebar and ignores the date filter. "
+        "The comparison uses per-household averages because the number of reporting households varies."
+    )
