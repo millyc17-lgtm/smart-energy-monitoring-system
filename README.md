@@ -13,7 +13,7 @@ Built with Python, Pandas, SQLite, scikit-learn, Plotly and Streamlit.
 - **Stores** the data in a SQLite database with indexes on household, time and date
 - **Detects anomalies** with two methods and compares them: a rolling statistical rule and an Isolation Forest model
 - **Forecasts** daily energy use per household and compares three models against simple baselines
-- **Shows it all** in a dashboard with household, date-range and electricity-price controls. The summary cards and charts are SQL aggregations run against the database, with filters passed as query parameters
+- **Shows it all** in a multi-page dashboard (Overview, Consumption, Predictions, Anomalies, Reports) with household, date-range, electricity-price and emissions-factor controls. The summary cards and charts are SQL aggregations run against the database, with filters passed as query parameters
 - **Estimates carbon emissions** using a configurable factor (default 0.13096 kg CO2e per kWh, see below) and produces a **monthly report** with month-on-month comparison and CSV download
 
 ![Forecast](outputs/dashboard_forecast.png)
@@ -21,6 +21,8 @@ Built with Python, Pandas, SQLite, scikit-learn, Plotly and Streamlit.
 ## Data
 
 Low Carbon London smart meter data (Kaggle, "Smart meters in London"), using `block_0.csv`: 50 households, half-hourly energy in kWh.
+
+Source and credit: the readings come from the UK Power Networks-led Low Carbon London project (London Datastore, "SmartMeter Energy Consumption Data in London Households"), which UK Power Networks released under a CC-BY licence. Check the current licence terms on the London Datastore before reuse, and credit the source.
 
 - Readings run from **December 2011 to February 2014**. This is historical data, not live usage.
 - 1,222,670 raw readings; 50 missing values were dropped, leaving 1,222,620. No duplicates or negative values were found.
@@ -97,7 +99,7 @@ data/
   raw/            original download (not tracked)
   processed/      cleaned data and model outputs (not tracked)
   energy.db       SQLite database (not tracked)
-dashboard/app.py  Streamlit app (queries energy.db with SQL)
+dashboard/        Streamlit app: app.py (navigation), common.py (SQL helpers), views/ (one file per page)
 models/           trained forecast model and results table
 outputs/          charts and screenshots
 clean.py  features.py  build_db.py  analysis.py
@@ -124,7 +126,8 @@ anomaly.py  anomaly_ml.py  forecast.py
 - **Dataset age.** Readings are from 2011 to 2014 and do not reflect current usage or tariffs.
 - **Small, unrepresentative sample.** 50 households from one file. The average of about 21 kWh per household per day is well above typical UK household use, so results should not be read as UK averages.
 - **Changing panel.** The number of reporting households changed over time, so early-period trends are unreliable and excluded.
-- **Tariff is an assumption.** The default price of 0.25 GBP per kWh is adjustable in the dashboard and is not a real tariff.
+- **Tariff groups.** Some households in the trial were on a dynamic time-of-use tariff during 2013. This project does not separate them, so some usage patterns (including evening peaks) may reflect price signals.
+- **Tariff is an assumption.** The default price of 0.25 GBP per kWh is adjustable in the dashboard and is not a real tariff. For reference, non-time-of-use customers in the trial paid a flat 14.228p per kWh (2013).
 - **Emissions are estimates.** A 2026 grid factor is applied to 2011-2014 data (see Carbon emissions above), and the factor should be checked against the official publication before reuse.
 - **Anomalies are unvalidated.** There is no ground truth, the two detectors disagree on most flags, and a flag does not explain the cause.
 - **Forecast scope.** The test window covers winter only, the model uses no weather or holiday data, and it underestimates sudden spikes because it relies on recent usage.
@@ -133,6 +136,5 @@ anomaly.py  anomaly_ml.py  forecast.py
 
 ## Planned work
 
-- Multi-page dashboard layout
 - Optional hosted version of the dashboard
 - Optional live-data prototype using an ESP32 with a safe, enclosed energy-monitoring module
