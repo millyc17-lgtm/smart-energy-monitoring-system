@@ -1,6 +1,9 @@
 data/raw/
-data/processed/
+data/processed/*
+!data/processed/anomalies_only.csv
+!data/processed/ml_anomalies_only.csv
 data/energy.db
+*.zip
 __pycache__/
 .venv/
 .ipynb_checkpoints/

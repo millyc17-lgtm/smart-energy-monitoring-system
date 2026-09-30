@@ -1,9 +1,32 @@
+import os
+import shutil
 import sqlite3
+import urllib.request
+import zipfile
 
 import pandas as pd
 import streamlit as st
 
 DB_PATH = "data/energy.db"
+DB_URL = "https://github.com/millyc17-lgtm/smart-energy-monitoring-system/releases/download/data-v1/energy_db.zip"
+
+
+def ensure_database():
+    """On a fresh machine (for example the hosted app), download the database once."""
+    if os.path.exists(DB_PATH):
+        return
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    zip_path = DB_PATH + ".zip"
+    try:
+        with st.spinner("First start: downloading the dataset. This can take a minute..."):
+            urllib.request.urlretrieve(DB_URL, zip_path)
+            with zipfile.ZipFile(zip_path) as z, z.open("energy.db") as src, open(DB_PATH + ".tmp", "wb") as dst:
+                shutil.copyfileobj(src, dst)
+            os.replace(DB_PATH + ".tmp", DB_PATH)
+            os.remove(zip_path)
+    except Exception as e:
+        st.error(f"Could not download the dataset: {e}")
+        st.stop()
 
 
 @st.cache_data
@@ -17,6 +40,7 @@ def run_query(sql, params=()):
 
 def sidebar_filters():
     """Draw the sidebar controls once and store the choices for every page to use."""
+    ensure_database()
     bounds = run_query("SELECT MIN(date) AS first_day, MAX(date) AS last_day FROM energy_readings")
     first_day = pd.Timestamp(bounds["first_day"][0]).date()
     last_day = pd.Timestamp(bounds["last_day"][0]).date()
