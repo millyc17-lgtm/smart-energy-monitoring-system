@@ -4,6 +4,10 @@ An end-to-end data project that cleans household electricity data, stores it in 
 
 Built with Python, Pandas, SQLite, scikit-learn, Plotly and Streamlit.
 
+**Live demo:** https://smart-energy-monitoring-system-exiz4cfleupwmm2r9eu7tq.streamlit.app/
+
+The first load can take a minute, because the app downloads the dataset on its first start (or after it has been asleep). The demo uses historical 2011-2014 data.
+
 ![Dashboard](outputs/dashboard.png)
 
 ## What it does
@@ -121,6 +125,10 @@ anomaly.py  anomaly_ml.py  forecast.py
    ```
 4. `streamlit run dashboard/app.py`
 
+## Hosting
+
+The dashboard is hosted on Streamlit Community Cloud. The SQLite database (161 MB, 25 MB zipped) is too large for the repository, so it is published as a file on this repo's `data-v1` release and the app downloads it on first start. The two small anomaly CSVs and the trained model are committed to the repo. `requirements.txt` pins exact library versions so the saved model loads correctly.
+
 ## Limitations
 
 - **Dataset age.** Readings are from 2011 to 2014 and do not reflect current usage or tariffs.
@@ -136,5 +144,4 @@ anomaly.py  anomaly_ml.py  forecast.py
 
 ## Planned work
 
-- Optional hosted version of the dashboard
 - Optional live-data prototype using an ESP32 with a safe, enclosed energy-monitoring module
