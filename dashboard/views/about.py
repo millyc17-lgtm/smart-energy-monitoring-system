@@ -1,0 +1,34 @@
+import streamlit as st
+
+st.title("About this project")
+
+st.markdown(
+    """
+A portfolio project that turns half-hourly household electricity readings into a cleaned database,
+anomaly detection, a forecast and an interactive dashboard.
+
+**Data.** Low Carbon London smart meter data (UK Power Networks, released under a CC-BY licence),
+accessed through the Kaggle copy "Smart meters in London". This app uses one file: 50 households,
+half-hourly kWh, December 2011 to February 2014. It is historical data, not live usage. Trends and
+forecasts use October 2012 onwards, when 43 to 50 households were reporting.
+
+**How it works**
+- Data is cleaned in Python and stored in SQLite, and the dashboard queries it with SQL.
+- Anomalies are flagged two ways: a rolling statistical rule and an Isolation Forest. They overlap on
+  about a quarter of flagged readings. There are no labelled anomalies, so accuracy cannot be measured.
+- The forecast predicts a household's next-day energy use. Linear Regression performed best, with an
+  average error of about 4.5 kWh per household per day (roughly 19% of the mean), only about 7% better
+  than simply repeating yesterday. The test period covers winter only.
+
+**Assumptions**
+- The electricity price (default £0.25 per kWh) is an adjustable placeholder, not a real tariff.
+- Emissions use an adjustable factor (default 0.13096 kg CO₂e per kWh, UK grid electricity,
+  DESNZ/DEFRA 2026). It is applied to 2011-2014 data, so emissions for that period are likely understated.
+
+**Limitations.** A small sample of 50 households, not representative of the UK average. Some households
+were on a dynamic time-of-use tariff in 2013, which this project does not separate. The forecast uses no
+weather or holiday data.
+"""
+)
+
+st.markdown("Code and full write-up: [GitHub repository](https://github.com/millyc17-lgtm/smart-energy-monitoring-system)")

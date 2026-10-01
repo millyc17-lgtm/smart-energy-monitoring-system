@@ -10,6 +10,7 @@ pages = [
     st.Page("views/predictions.py", title="Predictions", icon="🔮"),
     st.Page("views/anomalies.py", title="Anomalies", icon="⚠️"),
     st.Page("views/reports.py", title="Reports", icon="📄"),
+    st.Page("views/about.py", title="About", icon="ℹ️"),
 ]
 page = st.navigation(pages)
 sidebar_filters()
