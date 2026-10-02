@@ -18,7 +18,7 @@ forecasts use October 2012 onwards, when 43 to 50 households were reporting.
   about a quarter of flagged readings. Tested on artificial injected spikes, the rule detected about 87% of events and the Isolation Forest about 63% at similar flag rates, and small spikes are the hardest to catch.
 - The forecast predicts a household's next-day energy use. Models are tested with walk-forward validation
   across five periods in 2013. The best (a Random Forest using recent usage, calendar and weather features)
-  has an average error of about 3.5 kWh per household per day, around 12% better than simply repeating
+  has an average error of about 3.5 kWh per household per day, about 11% better than simply repeating yesterday
   yesterday. Weather inputs use observed weather, so real-world accuracy would be lower.
 
 **Assumptions**

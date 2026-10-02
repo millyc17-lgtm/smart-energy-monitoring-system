@@ -7,6 +7,8 @@ def rule_baseline(df):
     """Add the rolling 'normal' mean and std for each household and half-hour slot.
 
     df needs household_id, timestamp and energy_kwh, sorted by household_id then timestamp.
+    The previous 14 readings at the same slot are used (shifted by one, so a reading is
+    never part of its own baseline). At least 7 are needed, otherwise the baseline is NaN.
     """
     df = df.copy()
     df["slot"] = df["timestamp"].dt.hour * 2 + df["timestamp"].dt.minute // 30
@@ -16,9 +18,14 @@ def rule_baseline(df):
     return df
 
 
+def rule_upper_limit(df, k=3):
+    """Upper limit of normal: mean + k standard deviations (std floored at 0.05 kWh)."""
+    return df["normal_mean"] + k * df["normal_std"].clip(lower=0.05)
+
+
 def rule_flags(df, k=3):
     """True where a reading is more than k standard deviations above its normal."""
-    upper = df["normal_mean"] + k * df["normal_std"].clip(lower=0.05)
+    upper = rule_upper_limit(df, k)
     return (df["energy_kwh"] > upper) & upper.notna()
 
 

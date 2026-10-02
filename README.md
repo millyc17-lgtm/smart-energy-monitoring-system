@@ -1,5 +1,7 @@
 # Smart Energy Monitoring System
 
+![tests](https://github.com/millyc17-lgtm/smart-energy-monitoring-system/actions/workflows/tests.yml/badge.svg)
+
 An end-to-end data project that cleans household electricity data, stores it in SQLite, detects unusual consumption, forecasts daily usage, and presents everything in an interactive Streamlit dashboard that queries the database with SQL.
 
 Built with Python, Pandas, SQLite, scikit-learn, Plotly and Streamlit.
@@ -50,9 +52,9 @@ Also used from the same download: daily weather (`weather_daily_darksky.csv`), U
 
 Two methods were run over the same readings and compared.
 
-**1. Rolling rule (`anomaly.py`).** For each household and half-hour slot, "normal" is the mean and standard deviation of the previous 14 readings at that slot. A reading more than 3 standard deviations above normal is flagged. This flagged 38,916 of 1,205,820 checked readings (3.23%).
+**1. Rolling rule (`src/anomaly.py`).** For each household and half-hour slot, "normal" is the mean and standard deviation of the previous 14 readings at that slot. A reading more than 3 standard deviations above normal is flagged. This flagged 38,916 of 1,205,820 checked readings (3.23%).
 
-**2. Isolation Forest (`anomaly_ml.py`).** Features are the reading, the previous reading, the 3-hour rolling average (all scaled by each household's own mean), the hour and the weekday. `contamination` was set to 0.03 to match the rule's flag rate, so the two are comparable. This flagged 36,670 of 1,222,320 readings.
+**2. Isolation Forest (`src/anomaly_ml.py`).** Features are the reading, the previous reading, the 3-hour rolling average (all scaled by each household's own mean), the hour and the weekday. `contamination` was set to 0.03 to match the rule's flag rate, so the two are comparable. This flagged 36,670 of 1,222,320 readings.
 
 | | ML flagged | ML not flagged |
 |---|---|---|
@@ -68,7 +70,7 @@ Notes:
 
 ### Validation with injected anomalies
 
-To measure detection, 595 artificial events (2,080 readings) were added to a copy of the data (October 2012 onwards) in memory: an extra 0.5, 1, 2 or 4 kWh in each affected half hour, lasting either one reading or six in a row (3 hours), at random times across all 50 households (`validate_anomalies.py`, with shared logic in `detectors.py`). An event counts as detected if at least one of its readings was flagged. The flag rate is the share of untouched readings that were flagged; it includes genuinely unusual real readings, so it overstates false alarms.
+To measure detection, 595 artificial events (2,080 readings) were added to a copy of the data (October 2012 onwards) in memory: an extra 0.5, 1, 2 or 4 kWh in each affected half hour, lasting either one reading or six in a row (3 hours), at random times across all 50 households (`src/validate_anomalies.py`, with shared logic in `src/detectors.py`). An event counts as detected if at least one of its readings was flagged. The flag rate is the share of untouched readings that were flagged; it includes genuinely unusual real readings, so it overstates false alarms.
 
 | Detector | Setting | Events detected | Flag rate (untouched) | Flags per household per week |
 |---|---|---|---|---|
@@ -93,7 +95,7 @@ Caveats: the planted events are clean added blocks of energy, which suits the ro
 
 ## Forecasting
 
-Task: predict a household's total energy for the next day (`forecast_v2.py`).
+Task: predict a household's total energy for the next day (`src/forecast.py`).
 
 **Features.** Yesterday's usage, usage on the same weekday last week, the average of the last 7 days, the average of the same weekday over the last 4 weeks, day of week, weekend flag, month, a UK bank holiday flag, daily weather (max and min temperature, humidity, wind speed, cloud cover) and a flag for households on the dynamic time-of-use tariff.
 
@@ -101,27 +103,27 @@ Task: predict a household's total energy for the next day (`forecast_v2.py`).
 
 | Features | Linear Regression | Random Forest | Gradient Boosting |
 |---|---|---|---|
-| 1. Original (yesterday, last week, day, weekend, month) | 3.668 | 3.712 | 3.661 |
-| 2. + rolling averages | 3.542 | 3.502 | 3.528 |
-| 3. + bank holidays | 3.543 | 3.502 | 3.533 |
-| 4. + weather | 3.583 | **3.451** | 3.485 |
-| 5. + tariff group | 3.583 | 3.451 | 3.485 |
+| 1. Original (yesterday, last week, day, weekend, month) | 3.668 | 3.721 | 3.681 |
+| 2. + rolling averages | 3.542 | 3.503 | 3.547 |
+| 3. + bank holidays | 3.543 | 3.504 | 3.537 |
+| 4. + weather | 3.583 | **3.458** | 3.487 |
+| 5. + tariff group | 3.583 | 3.458 | 3.487 |
 
 Baselines: "same as yesterday" 3.904, "same day last week" 4.941.
 
-The best model (Random Forest, features 1 to 4) is 11.6% better than "same as yesterday", and 9% to 13% better in every individual test period:
+The best model (Random Forest, features 1 to 4) is 11.4% better than "same as yesterday", and 9% to 13% better in every individual test period:
 
 | Test period | Same as yesterday | Random Forest | Improvement |
 |---|---|---|---|
-| Apr-May 2013 | 3.818 | 3.466 | 9.2% |
-| Jun-Jul 2013 | 3.106 | 2.719 | 12.5% |
-| Aug-Sep 2013 | 3.276 | 2.871 | 12.4% |
+| Apr-May 2013 | 3.818 | 3.481 | 8.8% |
+| Jun-Jul 2013 | 3.106 | 2.716 | 12.6% |
+| Aug-Sep 2013 | 3.276 | 2.870 | 12.4% |
 | Oct-Nov 2013 | 4.412 | 3.856 | 12.6% |
-| Dec 2013-Feb 2014 | 4.908 | 4.346 | 11.5% |
+| Dec 2013-Feb 2014 | 4.908 | 4.367 | 11.0% |
 
 What helped and what didn't:
 - **Rolling averages** gave the biggest gain.
-- **Weather** helped the tree-based models modestly (about 1.5% for Random Forest) and made Linear Regression slightly worse. Daily energy is strongly related to temperature (correlation -0.82 with daily maximum temperature), but yesterday's usage already carries much of that information.
+- **Weather** helped the tree-based models modestly (about 1.3% for Random Forest) and made Linear Regression slightly worse. Daily energy is strongly related to temperature (correlation -0.82 with daily maximum temperature), but yesterday's usage already carries much of that information.
 - **Bank holidays and the tariff flag** made no measurable difference. Only 25 holiday dates are available, and only 2 of the 50 households were on the dynamic tariff.
 - Random Forest and Gradient Boosting are within about 1% of each other, so treat them as roughly tied.
 - Winter is the hardest period to predict (highest errors in the last test period).
@@ -144,32 +146,40 @@ The dashboard includes a monthly report (energy, estimated cost, estimated emiss
 
 ```
 data/
-  raw/            original download (not tracked)
-  processed/      cleaned data and model outputs (not tracked)
-  energy.db       SQLite database (not tracked)
+  raw/            original downloads (not tracked)
+  processed/      pipeline outputs (only the two small anomaly CSVs are tracked)
+  energy.db       SQLite database (not tracked; the hosted app downloads it from a release)
+src/
+  energy_lib.py   cleaning, feature and lag-feature functions (unit tested)
+  detectors.py    rule-based and Isolation Forest detectors (unit tested)
+  clean.py  features.py  build_db.py  analysis.py
+  anomaly.py  anomaly_ml.py  forecast.py  validate_anomalies.py
+tests/            pytest unit tests, run on every push by GitHub Actions
 dashboard/        Streamlit app: app.py (navigation), common.py (SQL helpers), views/ (one file per page)
 models/           forecast results and anomaly validation table
 outputs/          charts and screenshots
-clean.py  features.py  build_db.py  analysis.py
-anomaly.py  anomaly_ml.py  forecast_v2.py
-detectors.py  validate_anomalies.py
+run_pipeline.py   runs every pipeline step in order
 ```
 
 ## Run it
 
 1. `pip install -r requirements.txt`
 2. Download `block_0.csv`, `weather_daily_darksky.csv`, `uk_bank_holidays.csv` and `informations_households.csv` from the Kaggle dataset and put them in `data/raw/`
-3. Run in order:
+3. Run the whole pipeline (clean, features, database, charts, both anomaly detectors, forecasts):
    ```
-   python clean.py
-   python features.py
-   python build_db.py
-   python anomaly.py
-   python anomaly_ml.py
-   python forecast_v2.py
-   python validate_anomalies.py   # optional, about 5 minutes
+   python run_pipeline.py
    ```
+   Add `--with-validation` to also run the anomaly validation (about 5 minutes). Any step can also be run on its own, for example `python src/forecast.py`.
 4. `streamlit run dashboard/app.py`
+
+## Testing
+
+```
+pip install -r requirements-dev.txt
+pytest
+```
+
+The tests use small synthetic data, so they run in seconds without the dataset. They cover data cleaning (duplicates, bad values, sorting), the time, power and cost features, calendar-matched lag features (including missing days and households not leaking into each other), and both anomaly detectors (a spike is flagged, a spike cannot hide itself in its own baseline, nothing is flagged without enough history, higher thresholds never flag more). GitHub Actions runs them on every push.
 
 ## Hosting
 

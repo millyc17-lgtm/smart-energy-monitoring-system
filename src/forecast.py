@@ -9,6 +9,7 @@ import pandas as pd
 from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error
+from energy_lib import make_lag_frame
 
 pd.set_option("display.width", 220)
 pd.set_option("display.max_columns", None)
@@ -25,24 +26,8 @@ daily["date"] = pd.to_datetime(daily["date"])
 daily = daily[daily["date"] >= "2012-10-01"]
 
 # ---------- 2. Lag features on a complete daily calendar ----------
-wide = daily.pivot(index="date", columns="household_id", values="energy_kwh")
-last_day = wide.index.max()
-target_day = last_day + pd.Timedelta(days=1)  # the day we will forecast at the end
-wide = wide.reindex(pd.date_range(wide.index.min(), target_day, freq="D"))
-wide.index.name = "date"
 
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore", RuntimeWarning)
-    wk_avg = np.nanmean(np.stack([wide.shift(k).values for k in (7, 14, 21, 28)]), axis=0)
-
-frames = {
-    "energy_kwh": wide,
-    "lag_1": wide.shift(1),                                       # yesterday
-    "lag_7": wide.shift(7),                                       # same weekday last week
-    "roll_7": wide.shift(1).rolling(7, min_periods=5).mean(),     # average of the last 7 days
-    "wk_avg": pd.DataFrame(wk_avg, index=wide.index, columns=wide.columns),  # same weekday, last 4 weeks
-}
-full = pd.concat({name: f.stack() for name, f in frames.items()}, axis=1).reset_index()
+full, target_day = make_lag_frame(daily)
 
 # ---------- 3. Calendar, holiday, weather and tariff features ----------
 full["day_of_week"] = full["date"].dt.dayofweek
