@@ -16,7 +16,7 @@ The first load can take a minute, because the app downloads the dataset on its f
 - **Analyses** consumption by hour, weekday, weekend and month
 - **Stores** the data in a SQLite database with indexes on household, time and date
 - **Detects anomalies** with two methods and compares them: a rolling statistical rule and an Isolation Forest model
-- **Forecasts** daily energy use per household and compares three models against simple baselines
+- **Forecasts** daily energy use per household, comparing three models and five feature sets (including weather and bank holidays) against simple baselines with walk-forward validation
 - **Shows it all** in a multi-page dashboard (Overview, Consumption, Predictions, Anomalies, Reports) with household, date-range, electricity-price and emissions-factor controls. The summary cards and charts are SQL aggregations run against the database, with filters passed as query parameters
 - **Estimates carbon emissions** using a configurable factor (default 0.13096 kg CO2e per kWh, see below) and produces a **monthly report** with month-on-month comparison and CSV download
 
@@ -27,6 +27,8 @@ The first load can take a minute, because the app downloads the dataset on its f
 Low Carbon London smart meter data (Kaggle, "Smart meters in London"), using `block_0.csv`: 50 households, half-hourly energy in kWh.
 
 Source and credit: the readings come from the UK Power Networks-led Low Carbon London project (London Datastore, "SmartMeter Energy Consumption Data in London Households"), which UK Power Networks released under a CC-BY licence. Check the current licence terms on the London Datastore before reuse, and credit the source.
+
+Also used from the same download: daily weather (`weather_daily_darksky.csv`), UK bank holidays (`uk_bank_holidays.csv`) and household tariff labels (`informations_households.csv`). These raw files are not included in this repository.
 
 - Readings run from **December 2011 to February 2014**. This is historical data, not live usage.
 - 1,222,670 raw readings; 50 missing values were dropped, leaving 1,222,620. No duplicates or negative values were found.
@@ -66,23 +68,40 @@ Notes:
 
 ## Forecasting
 
-Task: predict a household's total energy for the next day. Features: yesterday's usage, usage a week earlier, day of week, weekend flag, month.
+Task: predict a household's total energy for the next day (`forecast_v2.py`).
 
-Evaluation uses a chronological split (no shuffling):
-- Train: 2012-10-08 to 2013-11-17
-- Test: 2013-11-18 to 2014-02-27 (mean 23.48 kWh per household per day)
+**Features.** Yesterday's usage, usage on the same weekday last week, the average of the last 7 days, the average of the same weekday over the last 4 weeks, day of week, weekend flag, month, a UK bank holiday flag, daily weather (max and min temperature, humidity, wind speed, cloud cover) and a flag for households on the dynamic time-of-use tariff.
 
-| Model | MAE (kWh) | RMSE (kWh) | R² |
+**Evaluation: walk-forward validation.** Instead of one test window, models are trained on the past and tested on the following two months, five times (test periods starting April, June, August, October and December 2013). This covers every season in the test data and is a more reliable measure than a single split. Results are MAE in kWh per household per day (lower is better), averaged over the five periods.
+
+| Features | Linear Regression | Random Forest | Gradient Boosting |
 |---|---|---|---|
-| Baseline: same as last week | 6.205 | 11.710 | 0.673 |
-| Baseline: same as yesterday | 4.862 | 9.145 | 0.800 |
-| Random Forest | 4.863 | 8.449 | 0.830 |
-| Gradient Boosting | 4.636 | 8.545 | 0.826 |
-| **Linear Regression** | **4.526** | **8.123** | **0.843** |
+| 1. Original (yesterday, last week, day, weekend, month) | 3.668 | 3.712 | 3.661 |
+| 2. + rolling averages | 3.542 | 3.502 | 3.528 |
+| 3. + bank holidays | 3.543 | 3.502 | 3.533 |
+| 4. + weather | 3.583 | **3.451** | 3.485 |
+| 5. + tariff group | 3.583 | 3.451 | 3.485 |
 
-Linear Regression had the lowest MAE, about 19% of the mean daily use and roughly 7% better than "same as yesterday". The differences between the top models are small, and Random Forest only matched the yesterday baseline. Errors are per household per day; the chart below averages across households, which smooths errors out.
+Baselines: "same as yesterday" 3.904, "same day last week" 4.941.
 
-![Actual vs predicted](outputs/actual_vs_predicted.png)
+The best model (Random Forest, features 1 to 4) is 11.6% better than "same as yesterday", and 9% to 13% better in every individual test period:
+
+| Test period | Same as yesterday | Random Forest | Improvement |
+|---|---|---|---|
+| Apr-May 2013 | 3.818 | 3.466 | 9.2% |
+| Jun-Jul 2013 | 3.106 | 2.719 | 12.5% |
+| Aug-Sep 2013 | 3.276 | 2.871 | 12.4% |
+| Oct-Nov 2013 | 4.412 | 3.856 | 12.6% |
+| Dec 2013-Feb 2014 | 4.908 | 4.346 | 11.5% |
+
+What helped and what didn't:
+- **Rolling averages** gave the biggest gain.
+- **Weather** helped the tree-based models modestly (about 1.5% for Random Forest) and made Linear Regression slightly worse. Daily energy is strongly related to temperature (correlation -0.82 with daily maximum temperature), but yesterday's usage already carries much of that information.
+- **Bank holidays and the tariff flag** made no measurable difference. Only 25 holiday dates are available, and only 2 of the 50 households were on the dynamic tariff.
+- Random Forest and Gradient Boosting are within about 1% of each other, so treat them as roughly tied.
+- Winter is the hardest period to predict (highest errors in the last test period).
+
+![Actual vs predicted](outputs/actual_vs_predicted_v2.png)
 
 ## Carbon emissions
 
@@ -104,16 +123,16 @@ data/
   processed/      cleaned data and model outputs (not tracked)
   energy.db       SQLite database (not tracked)
 dashboard/        Streamlit app: app.py (navigation), common.py (SQL helpers), views/ (one file per page)
-models/           trained forecast model and results table
+models/           forecast results (walk-forward table and latest forecast)
 outputs/          charts and screenshots
 clean.py  features.py  build_db.py  analysis.py
-anomaly.py  anomaly_ml.py  forecast.py
+anomaly.py  anomaly_ml.py  forecast_v2.py
 ```
 
 ## Run it
 
 1. `pip install -r requirements.txt`
-2. Download `block_0.csv` from the Kaggle dataset and put it in `data/raw/`
+2. Download `block_0.csv`, `weather_daily_darksky.csv`, `uk_bank_holidays.csv` and `informations_households.csv` from the Kaggle dataset and put them in `data/raw/`
 3. Run in order:
    ```
    python clean.py
@@ -121,25 +140,25 @@ anomaly.py  anomaly_ml.py  forecast.py
    python build_db.py
    python anomaly.py
    python anomaly_ml.py
-   python forecast.py
+   python forecast_v2.py
    ```
 4. `streamlit run dashboard/app.py`
 
 ## Hosting
 
-The dashboard is hosted on Streamlit Community Cloud. The SQLite database (161 MB, 25 MB zipped) is too large for the repository, so it is published as a file on this repo's `data-v1` release and the app downloads it on first start. The two small anomaly CSVs and the trained model are committed to the repo. `requirements.txt` pins exact library versions so the saved model loads correctly.
+The dashboard is hosted on Streamlit Community Cloud. The SQLite database (161 MB, 25 MB zipped) is too large for the repository, so it is published as a file on this repo's `data-v1` release and the app downloads it on first start. The two small anomaly CSVs and the forecast result files are committed to the repo. The trained forecast model is not committed (it is large), and the dashboard shows precomputed forecasts. `requirements.txt` pins exact library versions for reproducibility.
 
 ## Limitations
 
 - **Dataset age.** Readings are from 2011 to 2014 and do not reflect current usage or tariffs.
 - **Small, unrepresentative sample.** 50 households from one file. The average of about 21 kWh per household per day is well above typical UK household use, so results should not be read as UK averages.
 - **Changing panel.** The number of reporting households changed over time, so early-period trends are unreliable and excluded.
-- **Tariff groups.** Some households in the trial were on a dynamic time-of-use tariff during 2013. This project does not separate them, so some usage patterns (including evening peaks) may reflect price signals.
+- **Tariff groups.** Only 2 of the 50 households were on the dynamic time-of-use tariff in 2013, so any price-signal effect on the overall patterns is probably small. The tariff flag did not improve the forecast.
 - **Tariff is an assumption.** The default price of 0.25 GBP per kWh is adjustable in the dashboard and is not a real tariff. For reference, non-time-of-use customers in the trial paid a flat 14.228p per kWh (2013).
 - **Emissions are estimates.** A 2026 grid factor is applied to 2011-2014 data (see Carbon emissions above), and the factor should be checked against the official publication before reuse.
 - **Anomalies are unvalidated.** There is no ground truth, the two detectors disagree on most flags, and a flag does not explain the cause.
-- **Forecast scope.** The test window covers winter only, the model uses no weather or holiday data, and it underestimates sudden spikes because it relies on recent usage.
-- **Precomputed model outputs.** Anomaly flags and the forecast model are produced by the scripts and read by the dashboard. The dashboard does not retrain or score new data.
+- **Forecast scope.** Weather inputs are the observed weather for the forecast day. A real system would have to use a weather forecast, so real-world accuracy would be lower. There are only about 17 months of usable history, and the model still underestimates sudden spikes because it relies on recent usage.
+- **Precomputed model outputs.** Anomaly flags and forecasts are produced by the scripts and read by the dashboard. The dashboard does not retrain or score new data.
 - **Sampling interval.** Half-hourly data cannot show short bursts of power; the reported peak power is a half-hour average.
 
 ## Planned work

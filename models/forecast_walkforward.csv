@@ -1,0 +1,18 @@
+features,model,Apr 2013,Jun 2013,Aug 2013,Oct 2013,Dec 2013,mean MAE
+-,Baseline: same as yesterday,3.818,3.106,3.276,4.412,4.908,3.904
+-,Baseline: same day last week,4.949,3.845,4.139,5.61,6.162,4.941
+1 original features,Linear Regression,3.661,2.927,3.084,4.109,4.557,3.668
+1 original features,Random Forest,3.719,2.969,3.085,4.08,4.708,3.712
+1 original features,Gradient Boosting,3.737,2.936,3.038,4.068,4.525,3.661
+2 + rolling averages,Linear Regression,3.643,2.752,2.953,3.941,4.421,3.542
+2 + rolling averages,Random Forest,3.579,2.749,2.881,3.899,4.401,3.502
+2 + rolling averages,Gradient Boosting,3.724,2.735,2.923,3.948,4.308,3.528
+3 + bank holidays,Linear Regression,3.647,2.753,2.953,3.941,4.423,3.543
+3 + bank holidays,Random Forest,3.578,2.749,2.883,3.899,4.4,3.502
+3 + bank holidays,Gradient Boosting,3.743,2.742,2.921,3.95,4.309,3.533
+4 + weather,Linear Regression,3.649,2.925,2.962,3.967,4.415,3.583
+4 + weather,Random Forest,3.466,2.719,2.871,3.856,4.346,3.451
+4 + weather,Gradient Boosting,3.559,2.738,2.902,3.896,4.331,3.485
+5 + tariff group,Linear Regression,3.649,2.921,2.962,3.967,4.415,3.583
+5 + tariff group,Random Forest,3.465,2.72,2.87,3.855,4.346,3.451
+5 + tariff group,Gradient Boosting,3.559,2.738,2.902,3.896,4.331,3.485

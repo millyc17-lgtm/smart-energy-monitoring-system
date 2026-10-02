@@ -7,3 +7,4 @@ data/energy.db
 __pycache__/
 .venv/
 .ipynb_checkpoints/
+models/best_forecast_model_v2.joblib

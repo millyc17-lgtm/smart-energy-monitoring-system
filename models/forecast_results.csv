@@ -1,6 +1,0 @@
-Model,MAE,RMSE,R2
-Baseline: same as yesterday,4.862,9.145,0.8
-Baseline: same as last week,6.205,11.71,0.673
-Linear Regression,4.526,8.123,0.843
-Random Forest,4.863,8.449,0.83
-Gradient Boosting,4.636,8.545,0.826
