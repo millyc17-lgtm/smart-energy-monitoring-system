@@ -44,3 +44,39 @@ fig2 = px.line(daily, x="date", y="energy_kwh", title="Daily energy per househol
 left, right = st.columns(2)
 left.plotly_chart(fig1, width="stretch")
 right.plotly_chart(fig2, width="stretch")
+
+# ---------- Insights (calculated from the current selection) ----------
+st.subheader("Insights")
+
+hourly = by_hour.set_index("hour")["power_kw"].reindex(range(24))
+days = household_days(where, params)
+a, b = st.columns(2)
+
+if hourly.notna().all():
+    values = hourly.tolist()
+    overall = sum(values) / 24
+    # average power over each 3-hour window, wrapping past midnight
+    windows = {s: sum(values[(s + i) % 24] for i in range(3)) / 3 for s in range(24)}
+    start = max(windows, key=windows.get)
+    above = windows[start] / overall - 1
+    a.info(
+        f"**Busiest period:** usage is usually highest between {start:02d}:00 and {(start + 3) % 24:02d}:00, "
+        f"averaging {windows[start]:.2f} kW. That is {above:.0%} above the all-day average of {overall:.2f} kW."
+    )
+else:
+    a.info("Select a longer date range to see the busiest period.")
+
+weekend = days["date"].dt.dayofweek >= 5
+if weekend.any() and (~weekend).any():
+    wd = days.loc[~weekend, "energy_kwh"].mean()
+    we = days.loc[weekend, "energy_kwh"].mean()
+    diff = we / wd - 1
+    word = "more" if diff >= 0 else "less"
+    b.info(
+        f"**Weekends vs weekdays:** a typical weekend day uses {abs(diff):.0%} {word} electricity "
+        f"than a weekday ({we:.1f} kWh vs {wd:.1f} kWh per household)."
+    )
+else:
+    b.info("Select a longer date range to compare weekends with weekdays.")
+
+st.caption("Insights describe patterns in the selected data. They are not savings estimates.")

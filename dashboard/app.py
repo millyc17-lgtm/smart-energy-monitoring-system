@@ -8,6 +8,7 @@ pages = [
     st.Page("views/overview.py", title="Overview", icon="📊", default=True),
     st.Page("views/consumption.py", title="Consumption", icon="📈"),
     st.Page("views/predictions.py", title="Predictions", icon="🔮"),
+    st.Page("views/tariffs.py", title="Tariff what-if", icon="💷"),
     st.Page("views/anomalies.py", title="Anomalies", icon="⚠️"),
     st.Page("views/reports.py", title="Reports", icon="📄"),
     st.Page("views/about.py", title="About", icon="ℹ️"),
