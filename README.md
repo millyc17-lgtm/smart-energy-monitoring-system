@@ -15,7 +15,7 @@ The first load can take a minute, because the app downloads the dataset on its f
 - **Cleans and prepares** half-hourly smart meter readings (types, duplicates, missing values, time features)
 - **Analyses** consumption by hour, weekday, weekend and month
 - **Stores** the data in a SQLite database with indexes on household, time and date
-- **Detects anomalies** with two methods and compares them: a rolling statistical rule and an Isolation Forest model
+- **Detects anomalies** with two methods and compares them: a rolling statistical rule and an Isolation Forest model, validated on artificial injected spikes
 - **Forecasts** daily energy use per household, comparing three models and five feature sets (including weather and bank holidays) against simple baselines with walk-forward validation
 - **Shows it all** in a multi-page dashboard (Overview, Consumption, Predictions, Anomalies, Reports) with household, date-range, electricity-price and emissions-factor controls. The summary cards and charts are SQL aggregations run against the database, with filters passed as query parameters
 - **Estimates carbon emissions** using a configurable factor (default 0.13096 kg CO2e per kWh, see below) and produces a **monthly report** with month-on-month comparison and CSV download
@@ -59,12 +59,37 @@ Two methods were run over the same readings and compared.
 | **Rule flagged** | 10,415 | 28,501 |
 | **Rule not flagged** | 26,255 | 1,157,149 |
 
-The methods overlap on about a quarter of flagged readings. Readings flagged by both are treated as higher confidence.
+The methods overlap on about a quarter of flagged readings. Readings flagged by both methods are shown together in the dashboard, but whether agreement signals a real anomaly was not tested.
 
 Notes:
 - One unusual event shows up as several flagged readings in a row, so counts are of *readings*, not incidents.
-- No labelled anomalies exist, so neither method's accuracy can be measured. Flags mean "unusually high for this household at this time", not "fault" or "appliance left on".
+- No real labelled anomalies exist, so the detectors were validated on artificial spikes (below). Flags mean "unusually high for this household at this time", not "fault" or "appliance left on".
 - The counts above cover the whole dataset. The dashboard shows lower counts by default because it starts from October 2012.
+
+### Validation with injected anomalies
+
+To measure detection, 595 artificial events (2,080 readings) were added to a copy of the data (October 2012 onwards) in memory: an extra 0.5, 1, 2 or 4 kWh in each affected half hour, lasting either one reading or six in a row (3 hours), at random times across all 50 households (`validate_anomalies.py`, with shared logic in `detectors.py`). An event counts as detected if at least one of its readings was flagged. The flag rate is the share of untouched readings that were flagged; it includes genuinely unusual real readings, so it overstates false alarms.
+
+| Detector | Setting | Events detected | Flag rate (untouched) | Flags per household per week |
+|---|---|---|---|---|
+| Rolling rule | K = 2 | 92.8% | 6.11% | 20.5 |
+| Rolling rule | K = 3 (default) | 87.2% | 3.17% | 10.6 |
+| Rolling rule | K = 4 | 81.5% | 1.88% | 6.3 |
+| Rolling rule | K = 5 | 77.7% | 1.25% | 4.2 |
+| Isolation Forest | lowest 1% | 34.8% | 0.92% | 3.1 |
+| Isolation Forest | lowest 3% (default) | 62.5% | 2.89% | 9.7 |
+| Isolation Forest | lowest 5% | 72.3% | 4.88% | 16.4 |
+
+![Detection by spike size](outputs/anomaly_validation.png)
+
+Findings:
+- The rolling rule detected more events than the Isolation Forest at every comparable flag rate. At about 3% flagged, it found 87% of injected events against 63%.
+- Both detectors struggle with small spikes. Spikes smaller than the household's typical half-hour usage were detected 42% of the time by the rule and 9% by the Isolation Forest; spikes more than 3x typical usage were detected 99% and 87% of the time.
+- Short spikes are harder than sustained ones. For +1 kWh, the rule detected 85% of single-reading events and 91% of 3-hour events (Isolation Forest: 24% and 70%).
+- A detector that flagged 3% of readings at random would detect about 3% of single-reading events and about 17% of 3-hour events, so most results are well above chance, apart from the smallest Isolation Forest cases.
+- At its default setting the rule flags about 10 readings per household per week. For alerting, a higher K (4 or 5), or grouping consecutive flags into one event, would be less noisy at some cost in sensitivity.
+
+Caveats: the planted events are clean added blocks of energy, which suits the rolling rule because it compares each reading with the recent history of the same time slot. The Isolation Forest looks for unusual combinations of features and may do relatively better on other kinds of anomaly. Real faults will look different, so this shows sensitivity to one kind of event, not accuracy on real problems. Precision is not reported because the injected readings are only about 0.2% of the data, so any detector's precision would be tiny.
 
 ## Forecasting
 
@@ -123,10 +148,11 @@ data/
   processed/      cleaned data and model outputs (not tracked)
   energy.db       SQLite database (not tracked)
 dashboard/        Streamlit app: app.py (navigation), common.py (SQL helpers), views/ (one file per page)
-models/           forecast results (walk-forward table and latest forecast)
+models/           forecast results and anomaly validation table
 outputs/          charts and screenshots
 clean.py  features.py  build_db.py  analysis.py
 anomaly.py  anomaly_ml.py  forecast_v2.py
+detectors.py  validate_anomalies.py
 ```
 
 ## Run it
@@ -141,6 +167,7 @@ anomaly.py  anomaly_ml.py  forecast_v2.py
    python anomaly.py
    python anomaly_ml.py
    python forecast_v2.py
+   python validate_anomalies.py   # optional, about 5 minutes
    ```
 4. `streamlit run dashboard/app.py`
 
@@ -156,7 +183,7 @@ The dashboard is hosted on Streamlit Community Cloud. The SQLite database (161 M
 - **Tariff groups.** Only 2 of the 50 households were on the dynamic time-of-use tariff in 2013, so any price-signal effect on the overall patterns is probably small. The tariff flag did not improve the forecast.
 - **Tariff is an assumption.** The default price of 0.25 GBP per kWh is adjustable in the dashboard and is not a real tariff. For reference, non-time-of-use customers in the trial paid a flat 14.228p per kWh (2013).
 - **Emissions are estimates.** A 2026 grid factor is applied to 2011-2014 data (see Carbon emissions above), and the factor should be checked against the official publication before reuse.
-- **Anomalies are unvalidated.** There is no ground truth, the two detectors disagree on most flags, and a flag does not explain the cause.
+- **Anomaly validation is synthetic.** There is no real ground truth. The detectors were tested on artificial spikes only, they disagree on most flags, and a flag does not explain the cause.
 - **Forecast scope.** Weather inputs are the observed weather for the forecast day. A real system would have to use a weather forecast, so real-world accuracy would be lower. There are only about 17 months of usable history, and the model still underestimates sudden spikes because it relies on recent usage.
 - **Precomputed model outputs.** Anomaly flags and forecasts are produced by the scripts and read by the dashboard. The dashboard does not retrain or score new data.
 - **Sampling interval.** Half-hourly data cannot show short bursts of power; the reported peak power is a half-hour average.

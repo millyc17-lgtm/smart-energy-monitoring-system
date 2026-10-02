@@ -7,8 +7,8 @@ f = get_filters()
 household, start, end = f["household"], f["start"], f["end"]
 st.title("Anomalies")
 st.caption(
-    "Flags mean 'unusually high for this household at this time of day'. "
-    "There are no labelled anomalies, so accuracy cannot be measured, and a flag does not explain the cause."
+    "Flags mean 'unusually high for this household at this time of day'."
+    "There are no real labelled anomalies. Both detectors were tested on artificial injected spikes (see the README), and a flag does not explain the cause."
 )
 
 
@@ -41,7 +41,7 @@ st.subheader("Isolation Forest (machine learning)")
 ml = in_selection(load_ml_anomalies())
 st.write(
     f"{len(ml):,} readings flagged by the ML model, "
-    f"{int(ml['is_anomaly'].sum()):,} of them also flagged by the rule-based detector (higher confidence)"
+    f"{int(ml['is_anomaly'].sum()):,} of them also flagged by the rule-based detector"
 )
 top_ml = ml.nsmallest(10, "ml_score")[
     ["household_id", "timestamp", "energy_kwh", "normal_mean", "ml_score", "is_anomaly"]
