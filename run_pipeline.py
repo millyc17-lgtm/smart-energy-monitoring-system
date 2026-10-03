@@ -12,6 +12,7 @@ STEPS = [
     "anomaly.py",
     "anomaly_ml.py",
     "forecast.py",
+    "profiles.py",
 ]
 OPTIONAL = ["validate_anomalies.py"]          # about 5 minutes, run with --with-validation
 REQUIRED_RAW = [
