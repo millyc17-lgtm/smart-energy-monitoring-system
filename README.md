@@ -19,8 +19,10 @@ The first load can take a minute, because the app downloads the dataset on its f
 - **Stores** the data in a SQLite database with indexes on household, time and date
 - **Detects anomalies** with two methods and compares them: a rolling statistical rule and an Isolation Forest model, validated on artificial injected spikes
 - **Forecasts** daily energy use per household, comparing three models and five feature sets (including weather and bank holidays) against simple baselines with walk-forward validation
-- **Shows it all** in a multi-page dashboard (Overview, Consumption, Predictions, Anomalies, Reports) with household, date-range, electricity-price and emissions-factor controls. The summary cards and charts are SQL aggregations run against the database, with filters passed as query parameters
+- **Shows it all** in a multi-page dashboard (Overview, Consumption, Predictions, Anomalies, Reports, Tariff what-if, Load profiles, Live monitoring) with household, date-range, electricity-price and emissions-factor controls. The summary cards and charts are SQL aggregations run against the database, with filters passed as query parameters
 - **Estimates carbon emissions** using a configurable factor (default 0.13096 kg CO2e per kWh, see below) and produces a **monthly report** with month-on-month comparison and CSV download
+- **Explains the data** with insight cards, a **tariff what-if** page (flat price versus cheap, standard and peak hours) and **load profiles** that group households by the shape of their typical day
+- **Monitors in near real time**: a small local API receives readings into SQLite, a replay script feeds historical readings through it, and a Live Monitoring page shows them with a clear REPLAY or LIVE DEVICE label
 
 ![Forecast](outputs/dashboard_forecast.png)
 
@@ -142,6 +144,40 @@ Estimated emissions = energy (kWh) x an emissions factor. The factor is an input
 
 The dashboard includes a monthly report (energy, estimated cost, estimated emissions, average per household per day, peak power) for any month from October 2012, for all households or a single one, with a CSV download. It uses full days only (48 readings) and compares months using per-household daily averages, because the number of reporting households varies.
 
+## Tariff what-if and load profiles
+
+**Tariff what-if.** Prices the selected usage twice, at a flat price and on a tariff with cheap, standard and peak hours, and shows the cost per household per day. An optional slider moves a share of peak-hour usage into the cheap hours. All prices are adjustable placeholders, and usage is assumed unchanged apart from the share you move.
+
+**Load profiles.** Each household's average day (24 hourly values) is divided by its own average, so the groups reflect the *shape* of the day and not the size of the bill, then grouped with KMeans into 3 groups:
+
+| Group | Households | Average use | Busiest hour |
+|---|---|---|---|
+| 1 | 15 | 1.14 kW | 18:00 |
+| 2 | 25 | 0.80 kW | 19:00 |
+| 3 | 10 | 0.72 kW | 21:00 |
+
+The groups are **not sharply separated**. The silhouette score (higher is better) was only about 0.2 for every number of groups from 2 to 6 (0.200, 0.218, 0.203, 0.220, 0.217), so there is no clearly natural number of groups. Households vary smoothly, mainly in when the evening peak happens, and the groups are a rough way of slicing that range. The page says this too.
+
+## Live monitoring
+
+```
+replay.py (or a real device)  ->  live_api.py  ->  data/live.db (SQLite)  ->  Live monitoring page
+```
+
+- **API (`src/live_api.py`).** A small Flask service that receives readings as JSON. It checks each reading (device id, timestamp, power between 0 and 50 kW, source `replay` or `device`), rejects a whole batch if any reading is invalid, ignores repeats of the same device and time, and stores the rest in its own SQLite file. It listens on `127.0.0.1` only, and an optional API key (`LIVE_API_KEY`) can be required for posting.
+- **Replay (`src/replay.py`).** Reads historical readings for chosen households and dates and posts them one at a time, keeping their original 2011-2014 timestamps. They are labelled `replay`.
+- **Page.** Refreshes every 5 seconds and shows a REPLAY or LIVE DEVICE banner, the latest reading, a chart and a simple "unusual reading" marker (more than 3 standard deviations above the same device's previous-day average, a lighter rule than the Anomalies page because a live stream has little history).
+- **Public demo.** The hosted site cannot run the API, so the page replays historical readings inside the app instead, clearly labelled as a replay. Readings from a real home are never published.
+
+Run it locally:
+
+```
+pip install -r requirements-live.txt
+python src/live_api.py                 # window 1: start the API
+streamlit run dashboard/app.py         # window 2: open "Live monitoring"
+python src/replay.py --households MAC000002,MAC003428 --start 2013-09-13 --days 3 --delay 0.5   # window 3
+```
+
 ## Project structure
 
 ```
@@ -149,14 +185,19 @@ data/
   raw/            original downloads (not tracked)
   processed/      pipeline outputs (only the two small anomaly CSVs are tracked)
   energy.db       SQLite database (not tracked; the hosted app downloads it from a release)
+  live.db         live readings database created by the API (not tracked)
 src/
   energy_lib.py   cleaning, feature and lag-feature functions (unit tested)
   detectors.py    rule-based and Isolation Forest detectors (unit tested)
   clean.py  features.py  build_db.py  analysis.py
-  anomaly.py  anomaly_ml.py  forecast.py  validate_anomalies.py
+  anomaly.py  anomaly_ml.py  forecast.py  validate_anomalies.py  profiles.py
+  live_store.py   validation and SQLite storage for live readings (unit tested)
+  live_api.py     local Flask API that receives readings
+  live_alerts.py  simple unusual-reading rule for a live stream (unit tested)
+  replay.py       replays historical readings through the API
 tests/            pytest unit tests, run on every push by GitHub Actions
 dashboard/        Streamlit app: app.py (navigation), common.py (SQL helpers), views/ (one file per page)
-models/           forecast results and anomaly validation table
+models/           forecast results, anomaly validation table and household load profiles
 outputs/          charts and screenshots
 run_pipeline.py   runs every pipeline step in order
 ```
@@ -176,10 +217,10 @@ run_pipeline.py   runs every pipeline step in order
 
 ```
 pip install -r requirements-dev.txt
-pytest
+python -m pytest
 ```
 
-The tests use small synthetic data, so they run in seconds without the dataset. They cover data cleaning (duplicates, bad values, sorting), the time, power and cost features, calendar-matched lag features (including missing days and households not leaking into each other), and both anomaly detectors (a spike is flagged, a spike cannot hide itself in its own baseline, nothing is flagged without enough history, higher thresholds never flag more). GitHub Actions runs them on every push.
+The tests use small synthetic data, so they run in seconds without the dataset. They cover data cleaning (duplicates, bad values, sorting), the time, power and cost features, calendar-matched lag features (including missing days and households not leaking into each other), both anomaly detectors (a spike is flagged, a spike cannot hide itself in its own baseline, nothing is flagged without enough history, higher thresholds never flag more), and the live pipeline (the API rejects bad readings and saves nothing from a bad batch, ignores repeats, enforces the API key when one is set; the replay loader filters by household and date; the live alert rule flags a spike and never flags steady data). GitHub Actions runs them on every push.
 
 ## Hosting
 
@@ -196,8 +237,14 @@ The dashboard is hosted on Streamlit Community Cloud. The SQLite database (161 M
 - **Anomaly validation is synthetic.** There is no real ground truth. The detectors were tested on artificial spikes only, they disagree on most flags, and a flag does not explain the cause.
 - **Forecast scope.** Weather inputs are the observed weather for the forecast day. A real system would have to use a weather forecast, so real-world accuracy would be lower. There are only about 17 months of usable history, and the model still underestimates sudden spikes because it relies on recent usage.
 - **Precomputed model outputs.** Anomaly flags and forecasts are produced by the scripts and read by the dashboard. The dashboard does not retrain or score new data.
+- **Load profiles are rough.** The silhouette score is about 0.2 for every number of groups, so households do not form clearly separate types. The groups mainly differ in when the evening peak happens.
+- **Replay is not live.** The Live Monitoring page on the hosted site plays back 2011-2014 readings. The live path (API, database, page) has been tested end to end with replayed data, and has not yet been tested with a real device.
+- **Local-only API.** The API uses Flask's development server on `127.0.0.1` with no HTTPS and only an optional shared key. It is a local prototype and should not be exposed to the internet.
+- **Simple live alert rule.** The live page uses a lighter rule than the Anomalies page, and has no ground truth either.
+- **Tariff what-if is an assumption.** It reuses historical usage, assumes usage does not change apart from the share you move, and uses placeholder prices.
 - **Sampling interval.** Half-hourly data cannot show short bursts of power; the reported peak power is a half-hour average.
 
 ## Planned work
 
-- Optional live-data prototype using an ESP32 with a safe, enclosed energy-monitoring module
+- Connect a ready-made, enclosed smart plug with local power readings as a second live data source (local only, never published)
+- More households from the other data blocks
